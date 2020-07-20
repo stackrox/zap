@@ -52,6 +52,11 @@ func putSliceEncoder(e *sliceArrayEncoder) {
 	_sliceEncoderPool.Put(e)
 }
 
+type preludeField struct {
+	handler  preludeFieldHandler
+	addColon bool
+}
+
 type preludeFieldHandler func(c consoleEncoder, ent Entry, fields []Field, enc PrimitiveArrayEncoder)
 
 func timePreludeFieldHandler(c consoleEncoder, ent Entry, fields []Field, enc PrimitiveArrayEncoder) {
@@ -77,7 +82,7 @@ func callerPreludeFieldHandler(c consoleEncoder, ent Entry, fields []Field, enc 
 type consoleEncoder struct {
 	*jsonEncoder
 
-	preludeFieldHandlers []preludeFieldHandler
+	preludeFields []preludeField
 }
 
 // NewConsoleEncoder creates an encoder whose output is designed for human -
@@ -104,23 +109,35 @@ func NewConsoleEncoder(cfg EncoderConfig) Encoder {
 		jsonEncoder: newJSONEncoder(cfg, true),
 	}
 
-	for _, field := range ce.ConsoleFieldOrder {
+	for idx, field := range ce.ConsoleFieldOrder {
 		switch field {
 		case fieldTime:
 			if ce.TimeKey != "" && ce.EncodeTime != nil {
-				ce.preludeFieldHandlers = append(ce.preludeFieldHandlers, timePreludeFieldHandler)
+				ce.preludeFields = append(ce.preludeFields, preludeField{
+					handler: timePreludeFieldHandler,
+				})
 			}
 		case fieldLevel:
 			if ce.LevelKey != "" && ce.EncodeLevel != nil {
-				ce.preludeFieldHandlers = append(ce.preludeFieldHandlers, levelPreludeFieldHandler)
+				ce.preludeFields = append(ce.preludeFields, preludeField{
+					handler: levelPreludeFieldHandler,
+				})
 			}
 		case fieldName:
 			if ce.NameKey != "" {
-				ce.preludeFieldHandlers = append(ce.preludeFieldHandlers, namePreludeFieldHandler)
+				ce.preludeFields = append(ce.preludeFields, preludeField{
+					handler: namePreludeFieldHandler,
+				})
 			}
 		case fieldCaller:
 			if ce.CallerKey != "" && ce.EncodeCaller != nil {
-				ce.preludeFieldHandlers = append(ce.preludeFieldHandlers, callerPreludeFieldHandler)
+				ce.preludeFields = append(ce.preludeFields, preludeField{
+					handler: callerPreludeFieldHandler,
+				})
+			}
+		case ':':
+			if idx > 0 && idx < len(ce.preludeFields) {
+				ce.preludeFields[idx-1].addColon = true
 			}
 		}
 	}
@@ -130,10 +147,10 @@ func NewConsoleEncoder(cfg EncoderConfig) Encoder {
 
 func (c consoleEncoder) Clone() Encoder {
 	clone := consoleEncoder{
-		jsonEncoder:          c.jsonEncoder.Clone().(*jsonEncoder),
-		preludeFieldHandlers: c.preludeFieldHandlers,
+		jsonEncoder:   c.jsonEncoder.Clone().(*jsonEncoder),
+		preludeFields: c.preludeFields,
 	}
-	copy(c.preludeFieldHandlers, clone.preludeFieldHandlers)
+	copy(c.preludeFields, clone.preludeFields)
 	return clone
 }
 
@@ -148,8 +165,8 @@ func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, 
 	// ArrayEncoder for our plain-text format.
 	arr := getSliceEncoder()
 
-	for _, handler := range c.preludeFieldHandlers {
-		handler(c, ent, fields, arr)
+	for _, field := range c.preludeFields {
+		field.handler(c, ent, fields, arr)
 	}
 
 	for i := range arr.elems {
@@ -157,6 +174,9 @@ func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, 
 			line.AppendString(c.ConsoleSeparator)
 		}
 		fmt.Fprint(line, arr.elems[i])
+		if c.preludeFields[i].addColon {
+			line.AppendString("")
+		}
 	}
 	putSliceEncoder(arr)
 
