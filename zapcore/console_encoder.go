@@ -109,7 +109,7 @@ func NewConsoleEncoder(cfg EncoderConfig) Encoder {
 		jsonEncoder: newJSONEncoder(cfg, true),
 	}
 
-	for idx, field := range ce.ConsoleFieldOrder {
+	for _, field := range ce.ConsoleFieldOrder {
 		switch field {
 		case fieldTime:
 			if ce.TimeKey != "" && ce.EncodeTime != nil {
