@@ -28,6 +28,15 @@ import (
 	"go.uber.org/zap/internal/bufferpool"
 )
 
+const (
+	defaultConsoleFieldOrder = "TLNC"
+
+	fieldTime   rune = 'T'
+	fieldLevel  rune = 'L'
+	fieldName   rune = 'N'
+	fieldCaller rune = 'C'
+)
+
 var _sliceEncoderPool = sync.Pool{
 	New: func() interface{} {
 		return &sliceArrayEncoder{elems: make([]interface{}, 0, 2)}
@@ -43,8 +52,32 @@ func putSliceEncoder(e *sliceArrayEncoder) {
 	_sliceEncoderPool.Put(e)
 }
 
+type preludeFieldHandler func(c consoleEncoder, ent Entry, fields []Field, enc PrimitiveArrayEncoder)
+
+func timePreludeFieldHandler(c consoleEncoder, ent Entry, fields []Field, enc PrimitiveArrayEncoder) {
+	c.EncodeTime(ent.Time, enc)
+}
+
+func levelPreludeFieldHandler(c consoleEncoder, ent Entry, fields []Field, enc PrimitiveArrayEncoder) {
+	c.EncodeLevel(ent.Level, enc)
+}
+
+func namePreludeFieldHandler(c consoleEncoder, ent Entry, fields []Field, enc PrimitiveArrayEncoder) {
+	if ent.LoggerName != "" {
+		c.EncodeName(ent.LoggerName, enc)
+	}
+}
+
+func callerPreludeFieldHandler(c consoleEncoder, ent Entry, fields []Field, enc PrimitiveArrayEncoder) {
+	if ent.Caller.Defined {
+		c.EncodeCaller(ent.Caller, enc)
+	}
+}
+
 type consoleEncoder struct {
 	*jsonEncoder
+
+	preludeFieldHandlers []preludeFieldHandler
 }
 
 // NewConsoleEncoder creates an encoder whose output is designed for human -
@@ -60,11 +93,48 @@ func NewConsoleEncoder(cfg EncoderConfig) Encoder {
 		// Use a default delimiter of '\t' for backwards compatibility
 		cfg.ConsoleSeparator = "\t"
 	}
-	return consoleEncoder{newJSONEncoder(cfg, true)}
+	if len(cfg.ConsoleFieldOrder) == 0 {
+		cfg.ConsoleFieldOrder = defaultConsoleFieldOrder
+	}
+	if cfg.EncodeName == nil {
+		cfg.EncodeName = FullNameEncoder
+	}
+
+	ce := consoleEncoder{
+		jsonEncoder: newJSONEncoder(cfg, true),
+	}
+
+	for _, field := range ce.ConsoleFieldOrder {
+		switch field {
+		case fieldTime:
+			if ce.TimeKey != "" && ce.EncodeTime != nil {
+				ce.preludeFieldHandlers = append(ce.preludeFieldHandlers, timePreludeFieldHandler)
+			}
+		case fieldLevel:
+			if ce.LevelKey != "" && ce.EncodeLevel != nil {
+				ce.preludeFieldHandlers = append(ce.preludeFieldHandlers, levelPreludeFieldHandler)
+			}
+		case fieldName:
+			if ce.NameKey != "" {
+				ce.preludeFieldHandlers = append(ce.preludeFieldHandlers, namePreludeFieldHandler)
+			}
+		case fieldCaller:
+			if ce.CallerKey != "" && ce.EncodeCaller != nil {
+				ce.preludeFieldHandlers = append(ce.preludeFieldHandlers, callerPreludeFieldHandler)
+			}
+		}
+	}
+
+	return ce
 }
 
 func (c consoleEncoder) Clone() Encoder {
-	return consoleEncoder{c.jsonEncoder.Clone().(*jsonEncoder)}
+	clone := consoleEncoder{
+		jsonEncoder:          c.jsonEncoder.Clone().(*jsonEncoder),
+		preludeFieldHandlers: c.preludeFieldHandlers,
+	}
+	copy(c.preludeFieldHandlers, clone.preludeFieldHandlers)
+	return clone
 }
 
 func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, error) {
@@ -77,30 +147,11 @@ func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, 
 	// If this ever becomes a performance bottleneck, we can implement
 	// ArrayEncoder for our plain-text format.
 	arr := getSliceEncoder()
-	if c.TimeKey != "" && c.EncodeTime != nil {
-		c.EncodeTime(ent.Time, arr)
-	}
-	if c.LevelKey != "" && c.EncodeLevel != nil {
-		c.EncodeLevel(ent.Level, arr)
-	}
-	if ent.LoggerName != "" && c.NameKey != "" {
-		nameEncoder := c.EncodeName
 
-		if nameEncoder == nil {
-			// Fall back to FullNameEncoder for backward compatibility.
-			nameEncoder = FullNameEncoder
-		}
+	for _, handler := range c.preludeFieldHandlers {
+		handler(c, ent, fields, arr)
+	}
 
-		nameEncoder(ent.LoggerName, arr)
-	}
-	if ent.Caller.Defined {
-		if c.CallerKey != "" && c.EncodeCaller != nil {
-			c.EncodeCaller(ent.Caller, arr)
-		}
-		if c.FunctionKey != "" {
-			arr.AppendString(ent.Caller.Function)
-		}
-	}
 	for i := range arr.elems {
 		if i > 0 {
 			line.AppendString(c.ConsoleSeparator)
