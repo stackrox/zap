@@ -136,8 +136,8 @@ func NewConsoleEncoder(cfg EncoderConfig) Encoder {
 				})
 			}
 		case ':':
-			if idx > 0 && idx < len(ce.preludeFields) {
-				ce.preludeFields[idx-1].addColon = true
+			if l := len(ce.preludeFields); l > 0 {
+				ce.preludeFields[l-1].addColon = true
 			}
 		}
 	}
