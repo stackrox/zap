@@ -199,7 +199,7 @@ func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, 
 		}
 		fmt.Fprint(line, arr.elems[i])
 		if c.preludeFields[i].addColon {
-			line.AppendString("")
+			line.AppendString(":")
 		}
 	}
 	putSliceEncoder(arr)
