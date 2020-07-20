@@ -332,6 +332,14 @@ type EncoderConfig struct {
 	// Configures the field separator used by the console encoder. Defaults
 	// to tab.
 	ConsoleSeparator string `json:"consoleSeparator" yaml:"consoleSeparator"`
+
+	// ConsoleFieldOrder allows for adjusting the order of a subset of logging fields, i.e.:
+	//   T refers to the time field
+	//   L refers to the level field
+	//   N refers to the name field
+	//   C refers to the caller field
+	// Defaults to TLNC.
+	ConsoleFieldOrder string `json:"consoleFieldOrder" yaml:"consoleFieldOrder"`
 }
 
 // ObjectEncoder is a strongly-typed, encoding-agnostic interface for adding a
