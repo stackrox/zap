@@ -21,7 +21,6 @@
 package zapcore
 
 import (
-	"fmt"
 	"sync"
 )
 
@@ -46,17 +45,21 @@ func encodeError(key string, err error, enc ObjectEncoder) error {
 	basic := err.Error()
 	enc.AddString(key, basic)
 
-	switch e := err.(type) {
-	case errorGroup:
-		return enc.AddArray(key+"Causes", errArray(e.Errors()))
-	case fmt.Formatter:
-		verbose := fmt.Sprintf("%+v", e)
-		if verbose != basic {
-			// This is a rich error type, like those produced by
-			// github.com/pkg/errors.
-			enc.AddString(key+"Verbose", verbose)
-		}
-	}
+	/*
+		We currently disable printing verbose errors and their causes.
+		We experienced errors to be others too vast in terms of their context. Especially since the causes and the
+		basic error string err.Error() are essentially duplicates.
+		switch e := err.(type) {
+		case errorGroup:
+			return enc.AddArray(key+"Causes", errArray(e.Errors()))
+		case fmt.Formatter:
+			verbose := fmt.Sprintf("%+v", e)
+			if verbose != basic {
+				// This is a rich error type, like those produced by
+				// github.com/pkg/errors.
+				enc.AddString(key+"Verbose", verbose)
+			}
+		}*/
 	return nil
 }
 
