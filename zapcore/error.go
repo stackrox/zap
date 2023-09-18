@@ -47,7 +47,7 @@ func encodeError(key string, err error, enc ObjectEncoder) error {
 
 	/*
 		We currently disable printing verbose errors and their causes.
-		We experienced errors to be others too vast in terms of their context. Especially since the causes and the
+		We experienced errors to be otherwise too vast in terms of their context. Especially since the causes and the
 		basic error string err.Error() are essentially duplicates.
 		switch e := err.(type) {
 		case errorGroup:
