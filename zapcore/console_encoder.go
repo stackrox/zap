@@ -146,12 +146,10 @@ func NewConsoleEncoder(cfg EncoderConfig) Encoder {
 }
 
 func (c consoleEncoder) Clone() Encoder {
-	clone := consoleEncoder{
+	return consoleEncoder{
 		jsonEncoder:   c.jsonEncoder.Clone().(*jsonEncoder),
 		preludeFields: c.preludeFields,
 	}
-	copy(c.preludeFields, clone.preludeFields)
-	return clone
 }
 
 func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, error) {
