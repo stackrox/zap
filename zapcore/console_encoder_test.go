@@ -20,6 +20,7 @@
 package zapcore_test
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -82,6 +83,27 @@ func TestConsoleSeparator(t *testing.T) {
 		})
 
 	}
+}
+
+func TestConsoleEncoderCloneConcurrent(t *testing.T) {
+	const goroutineCount = 16
+	const cloneCount = 1000
+
+	encoder := NewConsoleEncoder(encoderTestEncoderConfig(" "))
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(goroutineCount)
+	for i := 0; i < goroutineCount; i++ {
+		go func() {
+			defer wg.Done()
+			<-start
+			for j := 0; j < cloneCount; j++ {
+				_ = encoder.Clone()
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
 }
 
 func encoderTestEncoderConfig(separator string) EncoderConfig {
